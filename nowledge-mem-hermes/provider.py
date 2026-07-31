@@ -825,7 +825,10 @@ class NowledgeMemProvider(MemoryProvider):
     @staticmethod
     def _sanitize_agent_identity(value: Any, *, source: str) -> str:
         """Return a safe explicit host identity, or empty string when invalid."""
-        identity = str(value).strip() if value is not None else ""
+        if value is None:
+            return ""
+
+        identity = str(value)
         if not identity or identity == "default":
             return ""
         if len(identity) > 200:
@@ -837,11 +840,24 @@ class NowledgeMemProvider(MemoryProvider):
         if not any(ch.isalnum() for ch in identity):
             logger.warning("Ignoring punctuation-only Nowledge Mem %s identity", source)
             return ""
-        if any(not (ch.isalnum() or ch in "._:/-") for ch in identity):
-            logger.warning("Ignoring malformed Nowledge Mem %s identity", source)
-            return ""
-        if identity.startswith("/") and not identity.startswith("/subagents/"):
-            logger.warning("Ignoring path-like Nowledge Mem %s identity", source)
+
+        if identity.startswith("/subagents/"):
+            subagent_alias = identity[len("/subagents/") :]
+            if (
+                not subagent_alias
+                or "/" in subagent_alias
+                or subagent_alias in {".", ".."}
+                or any(
+                    not (ch.isalnum() or ch in "._:-")
+                    for ch in subagent_alias
+                )
+            ):
+                logger.warning("Ignoring malformed Nowledge Mem %s identity", source)
+                return ""
+            return identity
+
+        if any(not (ch.isalnum() or ch in "._:-") for ch in identity):
+            logger.warning("Ignoring path-like or malformed Nowledge Mem %s identity", source)
             return ""
         return identity
 

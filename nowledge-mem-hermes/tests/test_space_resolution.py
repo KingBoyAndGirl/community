@@ -187,8 +187,19 @@ class SpaceResolutionTests(unittest.TestCase):
             ">",
             "/app",
             "/home/agent",
+            "C:/Users/agent",
+            "C:\\Users\\agent",
+            "../home/agent",
+            "home/agent",
+            "/subagents/../../home/agent",
+            "/subagents/",
+            "/subagents//reviewer",
             "The context says focused subagent",
             "bad\nidentity",
+            "\nbad",
+            "bad\n",
+            "bad\r",
+            "bad\t",
             "bad$value",
             "x" * 201,
         ]
@@ -198,6 +209,21 @@ class SpaceResolutionTests(unittest.TestCase):
                     {}, {"agent_identity": identity}
                 )
                 self.assertEqual(resolved, "")
+
+    def test_invalid_runtime_path_or_control_character_falls_back_to_valid_config(self):
+        invalid_runtime_values = [
+            "C:/Users/agent",
+            "../home/agent",
+            "/subagents/../../home/agent",
+            "bad\n",
+        ]
+        for identity in invalid_runtime_values:
+            with self.subTest(identity=identity):
+                resolved = provider.NowledgeMemProvider._resolve_agent_identity(
+                    {"agent_identity": "hermes-config"},
+                    {"agent_identity": identity},
+                )
+                self.assertEqual(resolved, "hermes-config")
 
     def test_invalid_runtime_identity_falls_back_to_valid_config(self):
         resolved = provider.NowledgeMemProvider._resolve_agent_identity(
