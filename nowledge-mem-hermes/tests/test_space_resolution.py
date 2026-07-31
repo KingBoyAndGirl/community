@@ -172,6 +172,47 @@ class SpaceResolutionTests(unittest.TestCase):
         resolved = provider.NowledgeMemProvider._resolve_agent_identity({}, {})
         self.assertEqual(resolved, "")
 
+    def test_agent_identity_accepts_documented_alias_forms(self):
+        valid = ["hermes-53293a78", "cumora:atlas", "/subagents/reviewer"]
+        for identity in valid:
+            with self.subTest(identity=identity):
+                resolved = provider.NowledgeMemProvider._resolve_agent_identity(
+                    {}, {"agent_identity": identity}
+                )
+                self.assertEqual(resolved, identity)
+
+    def test_agent_identity_rejects_malformed_runtime_values(self):
+        invalid = [
+            ",",
+            ">",
+            "/app",
+            "/home/agent",
+            "The context says focused subagent",
+            "bad\nidentity",
+            "bad$value",
+            "x" * 201,
+        ]
+        for identity in invalid:
+            with self.subTest(identity=identity):
+                resolved = provider.NowledgeMemProvider._resolve_agent_identity(
+                    {}, {"agent_identity": identity}
+                )
+                self.assertEqual(resolved, "")
+
+    def test_invalid_runtime_identity_falls_back_to_valid_config(self):
+        resolved = provider.NowledgeMemProvider._resolve_agent_identity(
+            {"agent_identity": "hermes-config"},
+            {"agent_identity": "/app"},
+        )
+        self.assertEqual(resolved, "hermes-config")
+
+    def test_agent_identity_rejects_malformed_config_value(self):
+        resolved = provider.NowledgeMemProvider._resolve_agent_identity(
+            {"agent_identity": "bad config prose"},
+            {"agent_identity": "default"},
+        )
+        self.assertEqual(resolved, "")
+
     def test_client_explicit_empty_space_clears_inherited_environment(self):
         captured: dict[str, object] = {}
         original_run = client_module.subprocess.run

@@ -823,27 +823,50 @@ class NowledgeMemProvider(MemoryProvider):
         return {}
 
     @staticmethod
+    def _sanitize_agent_identity(value: Any, *, source: str) -> str:
+        """Return a safe explicit host identity, or empty string when invalid."""
+        identity = str(value).strip() if value is not None else ""
+        if not identity or identity == "default":
+            return ""
+        if len(identity) > 200:
+            logger.warning("Ignoring overlong Nowledge Mem %s identity", source)
+            return ""
+        if any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in identity):
+            logger.warning("Ignoring malformed Nowledge Mem %s identity", source)
+            return ""
+        if not any(ch.isalnum() for ch in identity):
+            logger.warning("Ignoring punctuation-only Nowledge Mem %s identity", source)
+            return ""
+        if any(not (ch.isalnum() or ch in "._:/-") for ch in identity):
+            logger.warning("Ignoring malformed Nowledge Mem %s identity", source)
+            return ""
+        if identity.startswith("/") and not identity.startswith("/subagents/"):
+            logger.warning("Ignoring path-like Nowledge Mem %s identity", source)
+            return ""
+        return identity
+
+    @staticmethod
     def _resolve_agent_identity(
         config: Dict[str, Any],
         kwargs: Dict[str, Any],
     ) -> str:
-        """Resolve an explicit Hermes agent identity.
+        """Resolve and validate an explicit Hermes agent identity.
 
         Hermes may pass ``agent_identity`` for a named profile. If Hermes sends
         ``default`` (or nothing), an explicit ``nowledge-mem.json`` value may
         still map this provider to a Mem AI Identity. The provider never
-        invents a machine/container fingerprint as identity.
+        invents a machine/container fingerprint as identity, and malformed
+        aliases are never forwarded to the server.
         """
-        raw_identity = kwargs.get("agent_identity")
-        identity = str(raw_identity).strip() if raw_identity else ""
-        if identity and identity != "default":
+        identity = NowledgeMemProvider._sanitize_agent_identity(
+            kwargs.get("agent_identity"), source="runtime"
+        )
+        if identity:
             return identity
 
-        config_identity = config.get("agent_identity")
-        if isinstance(config_identity, str) and config_identity.strip():
-            return config_identity.strip()
-
-        return ""
+        return NowledgeMemProvider._sanitize_agent_identity(
+            config.get("agent_identity"), source="config"
+        )
 
     @staticmethod
     def _resolve_space(config: Dict[str, Any], identity: str) -> str | None:
